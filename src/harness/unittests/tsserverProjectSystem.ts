@@ -5017,6 +5017,59 @@ namespace ts.projectSystem {
             service.openExternalProject({ projectFileName: "p", rootFiles: [toExternalFile(f1.path)], options: { importHelpers: true } });
             service.checkNumberOfProjects({ externalProjects: 1 });
         });
+
+        it("should not crash when getting code fix from dynamic import", () => {
+            const project = "/user/username/projects/project";
+            const app: FileOrFolder = {
+                path: `${project}/app.ts`,
+                content: `export class c {
+    set x(val) {
+    }
+    method() {
+        this.x = import("./b");
+    }
+}`
+            };
+            const module: FileOrFolder = {
+                path: `${project}/b.ts`,
+                content: `export class D { }
+export default new D();`
+            };
+            const tsconfig: FileOrFolder = {
+                path: `${project}/tsconfig.json`,
+                content: `{
+ "compilerOptions": {
+   "target": "es5",
+   "strict": true
+  }
+}`
+            };
+            const libWithPromise: FileOrFolder = {
+                path: libFile.path,
+                content: `${libFile.content}
+declare class Promise<T> {}`
+            };
+            const files = [app, module, tsconfig, libWithPromise];
+            const host = createServerHost(files);
+            const session = createSession(host);
+            session.executeCommandSeq<protocol.OpenRequest>({
+                command: protocol.CommandTypes.Open,
+                arguments: {
+                    file: app.path
+                }
+            });
+            session.executeCommandSeq<protocol.CodeFixRequest>({
+                command: protocol.CommandTypes.GetCodeFixes,
+                arguments: {
+                    file: app.path,
+                    startLine: 2,
+                    startOffset: 11,
+                    endLine: 2,
+                    endOffset: 14,
+                    errorCodes: [Diagnostics.Parameter_0_implicitly_has_an_1_type.code]
+                }
+            });
+        });
     });
 
     describe("tsserverProjectSystem searching for config file", () => {
